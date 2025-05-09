@@ -73,3 +73,70 @@ jQuery(document).ready(function($) {
     });
   });
 });
+
+
+<form id="custom-signup-form">
+  <input type="text" name="username" placeholder="Username" required>
+  <input type="email" name="email" placeholder="Email" required>
+  <input type="password" name="password" placeholder="Password" required>
+  <button type="submit">Register</button>
+  <div id="signup-response"></div>
+</form>
+
+function custom_signup_scripts() {
+    wp_enqueue_script('custom-signup-ajax', get_template_directory_uri() . '/js/custom-signup.js', ['jquery'], null, true);
+
+    wp_localize_script('custom-signup-ajax', 'customSignup', [
+        'ajax_url' => admin_url('admin-ajax.php'),
+        'nonce'    => wp_create_nonce('custom_signup_nonce'),
+    ]);
+}
+add_action('wp_enqueue_scripts', 'custom_signup_scripts');
+
+
+function handle_custom_signup_ajax() {
+    check_ajax_referer('custom_signup_nonce', 'nonce');
+
+    $username = sanitize_user($_POST['username']);
+    $email = sanitize_email($_POST['email']);
+    $password = $_POST['password'];
+
+    if (username_exists($username) || email_exists($email)) {
+        wp_send_json_error(['message' => 'Username or email already exists.']);
+    }
+
+    $user_id = wp_create_user($username, $password, $email);
+
+    if (is_wp_error($user_id)) {
+        wp_send_json_error(['message' => $user_id->get_error_message()]);
+    }
+
+    wp_send_json_success(['message' => 'Registration successful. You can now log in.']);
+}
+add_action('wp_ajax_custom_signup', 'handle_custom_signup_ajax');
+add_action('wp_ajax_nopriv_custom_signup', 'handle_custom_signup_ajax');
+
+
+jQuery(document).ready(function($) {
+  $('#custom-signup-form').on('submit', function(e) {
+    e.preventDefault();
+
+    $.ajax({
+      type: 'POST',
+      url: customSignup.ajax_url,
+      data: {
+        action: 'custom_signup',
+        username: $('input[name="username"]').val(),
+        email: $('input[name="email"]').val(),
+        password: $('input[name="password"]').val(),
+        nonce: customSignup.nonce
+      },
+      success: function(response) {
+        $('#signup-response').html(response.data.message);
+      },
+      error: function() {
+        $('#signup-response').html('An error occurred.');
+      }
+    });
+  });
+});
